@@ -32,7 +32,8 @@ const verifyToken = (req, res, next) => {
   jwt.verify(token[1], secretKey, (err, user) => {
     if (err) res.send({ message: "ewrwr", err });
     else {
-      //console.log("USER ", user);
+      console.log("YYYY ", user);
+      req.user = user;
       next();
     }
   });
@@ -102,6 +103,7 @@ app.put("/admin/courses/:courseId", verifyToken, (req, res) => {
   res.send({ message: "Course updated successfully" });
 });
 
+//All Couses
 // GET /admin/courses
 // Description: Returns all the courses.
 // Input: Headers: { 'Authorization': 'Bearer jwt_token_here' }
@@ -132,7 +134,7 @@ app.post("/users/signup", (req, res) => {
   }
 });
 
-//----------------------------------
+//User Login
 // - POST /users/login
 //    Description: Authenticates a user. It requires the user to send username and password in the headers.
 //    Input: Headers: { 'username': 'user', 'password': 'pass' }
@@ -153,16 +155,70 @@ app.post("/users/login", (req, res) => {
   }
 });
 
-app.get("/users/courses", (req, res) => {
-  // logic to list all courses
+app.get("/users/courses", verifyToken, (req, res) => {
+  let availableCourses = COURSES.filter((item) => item.published === true);
+  res.send(availableCourses);
 });
 
-app.post("/users/courses/:courseId", (req, res) => {
-  // logic to purchase a course
+//Purchasing Course
+// POST /users/courses/:courseId
+//    Description: Purchases a course. courseId in the URL path should be replaced with the ID of the course to be purchased.
+//    Input: Headers: { 'Authorization': 'Bearer jwt_token_here' }
+//    Output: { message: 'Course purchased successfully' }
+
+app.post("/users/courses/:courseId", verifyToken, (req, res) => {
+  const courseId = req.params.courseId;
+  // Find the course with the specified courseId
+  const course = COURSES.find((item) => item.Id == courseId);
+  if (!course) {
+    // Course not found
+    return res.status(404).json({ message: "Course not found" });
+  }
+  if (!course.published) {
+    // Course is not published
+    return res.status(403).json({ message: "Course is not published" });
+  }
+  // Find the user by username (assuming req.user contains user info)
+  const user = USERS.find((item) => item.username == req.user.username);
+
+  if (!user) {
+    // User not found
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  // Check if the user has already purchased the course
+  user.purchasedCourses = user.purchasedCourses || [];
+
+  if (
+    user.purchasedCourses.some(
+      (purchasedCourse) => purchasedCourse.id == courseId
+    )
+  ) {
+    return res.status(400).json({ message: "Course already purchased" });
+  }
+
+  // Add the course to the user's purchasedCourses array
+  user.purchasedCourses.push(course);
+
+  res.status(200).json({ message: "Course purchased successfully" });
 });
 
-app.get("/users/purchasedCourses", (req, res) => {
-  // logic to view purchased courses
+//Courses pusrchased by user
+// GET /users/purchasedCourses
+//    Description: Lists all the courses purchased by the user.
+//    Input: Headers: { 'Authorization': 'Bearer jwt_token_here' }
+//    Output: { purchasedCourses: [ { id: 1, title: 'course title', description: 'course description', price: 100, imageLink: 'https://linktoimage.com', published: true }, ... ] }
+
+app.get("/users/purchasedCourses", verifyToken, (req, res) => {
+  const user = USERS.find((item) => item.username === req.user.username);
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  const purchasedCourses = user.purchasedCourses || [];
+
+  res.send(purchasedCourses);
 });
 
 app.listen(3000, () => {
